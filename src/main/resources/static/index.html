@@ -1,0 +1,145 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Nebula Store — технологии, которые ощущаются</title>
+    <meta name="description"
+          content="Nebula Store — демо-магазин электроники: аудио, клавиатуры, мониторы, носимые устройства и аксессуары.">
+    <link rel="icon" href="/favicon.svg" type="image/svg+xml">
+    <link rel="stylesheet" href="/css/styles.css">
+</head>
+<body>
+<div class="aurora" aria-hidden="true">
+    <span class="aurora__blob aurora__blob--one"></span>
+    <span class="aurora__blob aurora__blob--two"></span>
+    <span class="aurora__blob aurora__blob--three"></span>
+</div>
+
+<header class="site-header">
+    <a class="brand" href="/" aria-label="Nebula Store, на главную">
+        <span class="brand__mark">N</span>
+        <span class="brand__text">Nebula<em>store</em></span>
+    </a>
+
+    <nav class="site-nav" aria-label="Основная навигация">
+        <a href="#catalog" class="site-nav__link is-active">Каталог</a>
+        <a href="#about" class="site-nav__link">О магазине</a>
+        <a href="#delivery" class="site-nav__link">Доставка</a>
+    </nav>
+
+    <div class="header-actions">
+        <label class="search">
+            <svg class="search__icon" viewBox="0 0 24 24" aria-hidden="true">
+                <circle cx="11" cy="11" r="7"></circle>
+                <path d="m20 20-3.5-3.5"></path>
+            </svg>
+            <input id="search-input" class="search__input" type="search" placeholder="Найти товар…"
+                   autocomplete="off" aria-label="Поиск по каталогу">
+        </label>
+
+        <button id="cart-button" class="cart-button" type="button" aria-label="Корзина">
+            <svg viewBox="0 0 24 24" aria-hidden="true">
+                <path d="M4 5h2l2.2 10.2a2 2 0 0 0 2 1.6h7.7a2 2 0 0 0 2-1.6L21.5 8H7"></path>
+                <circle cx="10" cy="20" r="1.4"></circle>
+                <circle cx="18" cy="20" r="1.4"></circle>
+            </svg>
+            <span id="cart-count" class="cart-button__badge" data-count="0">0</span>
+        </button>
+    </div>
+</header>
+
+<main>
+    <section class="hero">
+        <p class="hero__eyebrow"><span class="pulse-dot" aria-hidden="true"></span> Новая коллекция · 2026</p>
+        <h1 class="hero__title">Технологии,<br>которые <span class="gradient-text">ощущаются</span></h1>
+        <p class="hero__lead">
+            Аудио, периферия и аксессуары, отобранные вручную. Проверяем каждую позицию
+            и доставляем по России за два дня.
+        </p>
+        <div class="hero__actions">
+            <a class="btn btn--primary" href="#catalog">Смотреть каталог</a>
+            <button id="hero-shuffle" class="btn btn--ghost" type="button">Удивить меня</button>
+        </div>
+        <dl class="hero__stats">
+            <div class="stat">
+                <dt>Товаров</dt>
+                <dd id="stat-products">—</dd>
+            </div>
+            <div class="stat">
+                <dt>Категорий</dt>
+                <dd id="stat-categories">—</dd>
+            </div>
+            <div class="stat">
+                <dt>Средний рейтинг</dt>
+                <dd id="stat-rating">—</dd>
+            </div>
+        </dl>
+    </section>
+
+    <section id="catalog" class="catalog">
+        <div class="catalog__head">
+            <div>
+                <h2 class="section-title">Каталог</h2>
+                <p id="catalog-subtitle" class="muted">Загружаем товары…</p>
+            </div>
+            <label class="sort">
+                <span>Сортировка</span>
+                <select id="sort-select" class="sort__select">
+                    <option value="popular">Популярные</option>
+                    <option value="price_asc">Сначала дешёвые</option>
+                    <option value="price_desc">Сначала дорогие</option>
+                    <option value="rating">По рейтингу</option>
+                    <option value="name">По названию</option>
+                </select>
+            </label>
+        </div>
+
+        <div id="category-chips" class="chips" role="group" aria-label="Фильтр по категориям"></div>
+
+        <div id="product-grid" class="grid" aria-live="polite"></div>
+
+        <div id="empty-state" class="empty" hidden>
+            <p class="empty__icon" aria-hidden="true">🛰️</p>
+            <h3>Ничего не нашлось</h3>
+            <p class="muted">Попробуйте изменить запрос или сбросить фильтры.</p>
+            <button id="reset-filters" class="btn btn--ghost" type="button">Сбросить фильтры</button>
+        </div>
+    </section>
+
+    <section id="about" class="features">
+        <article class="feature">
+            <span class="feature__icon" aria-hidden="true">📦</span>
+            <h3>Доставка за 2 дня</h3>
+            <p class="muted">Собственная логистика в 180 городах. Бесплатно от 5 000 ₽.</p>
+        </article>
+        <article class="feature">
+            <span class="feature__icon" aria-hidden="true">🛡️</span>
+            <h3>Гарантия 2 года</h3>
+            <p class="muted">Официальная гарантия производителя и 14 дней на возврат.</p>
+        </article>
+        <article id="delivery" class="feature">
+            <span class="feature__icon" aria-hidden="true">💳</span>
+            <h3>Оплата как удобно</h3>
+            <p class="muted">Картой, СБП или при получении. Без скрытых комиссий.</p>
+        </article>
+    </section>
+</main>
+
+<footer class="site-footer">
+    <div class="site-footer__brand">
+        <span class="brand__mark">N</span>
+        <span>Nebula Store · демо-проект на Spring Boot</span>
+    </div>
+    <p class="muted small">© 2026 Nebula Store. Все товары вымышлены, совпадения случайны.</p>
+</footer>
+
+<dialog id="product-dialog" class="dialog" aria-labelledby="dialog-title">
+    <div id="dialog-body" class="dialog__body"></div>
+</dialog>
+
+<div id="toasts" class="toasts" role="status" aria-live="polite"></div>
+
+<script src="/js/app.js" defer></script>
+</body>
+</html>
