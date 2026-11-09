@@ -1,0 +1,22 @@
+spring:
+  datasource:
+    url: jdbc:h2:mem:nebula-test;DB_CLOSE_DELAY=-1
+    driver-class-name: org.h2.Driver
+    username: sa
+    password: ""
+  jpa:
+    hibernate:
+      ddl-auto: create-drop
+    open-in-view: false
+  h2:
+    console:
+      enabled: false
+
+app:
+  admin-token: test-admin-token
+  seed-demo-data: true
+
+logging:
+  level:
+    root: WARN
+    com.nebula.store: INFO
