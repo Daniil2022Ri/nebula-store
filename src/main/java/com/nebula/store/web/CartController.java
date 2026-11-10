@@ -24,8 +24,6 @@ import org.springframework.web.bind.annotation.RestController;
 @RequestMapping("/api/cart")
 public class CartController {
 
-    public static final String CART_HEADER = "X-Cart-Id";
-
     private final CartService cartService;
 
     public CartController(CartService cartService) {
@@ -33,31 +31,31 @@ public class CartController {
     }
 
     @GetMapping
-    public CartDto view(@RequestHeader(name = CART_HEADER, required = false) String cartId) {
+    public CartDto view(@RequestHeader(name = ApiHeaders.CART_ID, required = false) String cartId) {
         return cartService.view(cartId);
     }
 
     @PostMapping("/items")
-    public CartDto addItem(@RequestHeader(name = CART_HEADER, required = false) String cartId,
+    public CartDto addItem(@RequestHeader(name = ApiHeaders.CART_ID, required = false) String cartId,
                            @Valid @RequestBody AddItemRequest request) {
         return cartService.addItem(cartId, request.productId(), request.quantity());
     }
 
     @PutMapping("/items/{productId}")
-    public CartDto updateItem(@RequestHeader(name = CART_HEADER, required = false) String cartId,
+    public CartDto updateItem(@RequestHeader(name = ApiHeaders.CART_ID, required = false) String cartId,
                               @PathVariable long productId,
                               @Valid @RequestBody UpdateQuantityRequest request) {
         return cartService.setQuantity(cartId, productId, request.quantity());
     }
 
     @DeleteMapping("/items/{productId}")
-    public CartDto removeItem(@RequestHeader(name = CART_HEADER, required = false) String cartId,
+    public CartDto removeItem(@RequestHeader(name = ApiHeaders.CART_ID, required = false) String cartId,
                               @PathVariable long productId) {
         return cartService.removeItem(cartId, productId);
     }
 
     @DeleteMapping
-    public CartDto clear(@RequestHeader(name = CART_HEADER, required = false) String cartId) {
+    public CartDto clear(@RequestHeader(name = ApiHeaders.CART_ID, required = false) String cartId) {
         return cartService.clear(cartId);
     }
 }

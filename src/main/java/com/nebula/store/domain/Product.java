@@ -87,7 +87,7 @@ public class Product {
             throw new IllegalArgumentException("Quantity must be positive");
         }
         if (quantity > stock) {
-            throw new IllegalStateException("Not enough stock for " + name + " (left: " + stock + ")");
+            throw new IllegalStateException("«" + name + "»: в наличии только " + stock + " шт.");
         }
         stock -= quantity;
     }
