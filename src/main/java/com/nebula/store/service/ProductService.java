@@ -13,7 +13,10 @@ import org.springframework.transaction.annotation.Transactional;
 import org.springframework.util.StringUtils;
 
 import java.util.ArrayList;
+import java.util.Collection;
 import java.util.List;
+import java.util.Map;
+import java.util.stream.Collectors;
 
 /**
  * Read-side of the catalog: filtering, searching and sorting of active products.
@@ -56,6 +59,16 @@ public class ProductService {
         return products.countActiveByCategory().stream()
                 .map(row -> new CategoryDto((String) row[0], ((Number) row[1]).longValue()))
                 .toList();
+    }
+
+    /** Bulk lookup that silently skips inactive or deleted products. */
+    public Map<Long, Product> findActiveByIds(Collection<Long> ids) {
+        if (ids.isEmpty()) {
+            return Map.of();
+        }
+        return products.findAllById(ids).stream()
+                .filter(Product::isActive)
+                .collect(Collectors.toMap(Product::getId, product -> product));
     }
 
     public long countActive() {
