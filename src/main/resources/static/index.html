@@ -38,7 +38,8 @@
                    autocomplete="off" aria-label="Поиск по каталогу">
         </label>
 
-        <button id="cart-button" class="cart-button" type="button" aria-label="Корзина">
+        <button id="cart-button" class="cart-button" type="button" aria-label="Корзина"
+                aria-expanded="false" aria-controls="cart-drawer">
             <svg viewBox="0 0 24 24" aria-hidden="true">
                 <path d="M4 5h2l2.2 10.2a2 2 0 0 0 2 1.6h7.7a2 2 0 0 0 2-1.6L21.5 8H7"></path>
                 <circle cx="10" cy="20" r="1.4"></circle>
@@ -137,6 +138,32 @@
 <dialog id="product-dialog" class="dialog" aria-labelledby="dialog-title">
     <div id="dialog-body" class="dialog__body"></div>
 </dialog>
+
+<div id="cart-backdrop" class="backdrop" hidden></div>
+
+<aside id="cart-drawer" class="drawer" tabindex="-1" aria-labelledby="cart-title" aria-hidden="true">
+    <header class="drawer__head">
+        <h2 id="cart-title" class="drawer__title">
+            Корзина <span id="drawer-count" class="drawer__count">0</span>
+        </h2>
+        <button class="drawer__close" type="button" data-action="close-cart" aria-label="Закрыть корзину">
+            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18"></path></svg>
+        </button>
+    </header>
+
+    <div id="cart-lines" class="cart-lines" aria-live="polite"></div>
+
+    <footer class="drawer__foot">
+        <div class="drawer__total">
+            <span>Итого</span>
+            <strong id="cart-subtotal">0 ₽</strong>
+        </div>
+        <button id="checkout-button" class="btn btn--primary btn--block" type="button" disabled>
+            Перейти к оформлению
+        </button>
+        <p class="muted small drawer__note">Оформление заказа подключим на следующем этапе.</p>
+    </footer>
+</aside>
 
 <div id="toasts" class="toasts" role="status" aria-live="polite"></div>
 

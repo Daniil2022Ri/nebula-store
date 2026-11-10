@@ -3,12 +3,16 @@
  *
  * Talks to the Spring Boot API under /api, keeps the catalog state in memory and
  * re-renders the grid whenever the category, search query or sort order changes.
- * The cart is a placeholder for now: the API part lands in the next iteration.
+ *
+ * The cart is server-side and stateless on the client: the browser stores only an opaque
+ * cart id in localStorage and sends it back in the X-Cart-Id header. Every mutation
+ * returns the full cart snapshot, which is rendered as-is.
  */
 (() => {
     'use strict';
 
     const API = '/api';
+    const CART_KEY = 'nebula.cart-id';
 
     const state = {
         products: [],
@@ -16,8 +20,8 @@
         category: null,
         query: '',
         sort: 'popular',
-        stats: null,
         loading: false,
+        cart: { id: null, items: [], itemCount: 0, subtotal: 0 },
     };
 
     const dom = {
@@ -33,6 +37,12 @@
         toasts: document.getElementById('toasts'),
         cartButton: document.getElementById('cart-button'),
         cartCount: document.getElementById('cart-count'),
+        cartDrawer: document.getElementById('cart-drawer'),
+        cartBackdrop: document.getElementById('cart-backdrop'),
+        cartLines: document.getElementById('cart-lines'),
+        cartSubtotal: document.getElementById('cart-subtotal'),
+        drawerCount: document.getElementById('drawer-count'),
+        checkoutButton: document.getElementById('checkout-button'),
         shuffle: document.getElementById('hero-shuffle'),
         statProducts: document.getElementById('stat-products'),
         statCategories: document.getElementById('stat-categories'),
@@ -74,8 +84,12 @@
         };
     };
 
-    async function request(path) {
-        const response = await fetch(API + path, { headers: { Accept: 'application/json' } });
+    async function request(path, options = {}) {
+        const { headers, ...rest } = options;
+        const response = await fetch(API + path, {
+            ...rest,
+            headers: { Accept: 'application/json', ...headers },
+        });
         if (!response.ok) {
             let detail = `Ошибка ${response.status}`;
             try {
@@ -109,8 +123,16 @@
         return `<span class="stars" aria-hidden="true">${stars}</span>`;
     }
 
+    function plural(n, forms) {
+        const mod10 = n % 10;
+        const mod100 = n % 100;
+        if (mod10 === 1 && mod100 !== 11) return forms[0];
+        if (mod10 >= 2 && mod10 <= 4 && (mod100 < 12 || mod100 > 14)) return forms[1];
+        return forms[2];
+    }
+
     /* ------------------------------------------------------------------ */
-    /* rendering                                                          */
+    /* catalog rendering                                                  */
     /* ------------------------------------------------------------------ */
 
     function renderSkeletons(count = 8) {
@@ -159,6 +181,9 @@
                 <div class="card__art" style="--tint:${tintFor(product.category)}">
                     ${product.inStock ? '' : '<span class="card__badge">нет в наличии</span>'}
                     <span aria-hidden="true">${product.icon}</span>
+                    <button class="card__quickadd" type="button" data-action="quick-add"
+                            data-id="${product.id}" aria-label="Добавить «${escapeHtml(product.name)}» в корзину"
+                            ${product.inStock ? '' : 'disabled'}>+</button>
                 </div>
                 <div class="card__body">
                     <span class="card__category">${escapeHtml(product.category)}</span>
@@ -185,11 +210,11 @@
     }
 
     function updateSubtitle() {
-        const count = state.products.length;
-        if (state.error) {
-            dom.subtitle.textContent = 'Каталог временно недоступен';
+        if (!state.products.length) {
+            dom.subtitle.textContent = 'Ничего не найдено — попробуйте другой запрос';
             return;
         }
+        const count = state.products.length;
         const parts = [`${count} ${plural(count, ['товар', 'товара', 'товаров'])}`];
         if (state.category) {
             parts.push(`в категории «${state.category}»`);
@@ -200,16 +225,8 @@
         dom.subtitle.textContent = parts.join(' ');
     }
 
-    function plural(n, forms) {
-        const mod10 = n % 10;
-        const mod100 = n % 100;
-        if (mod10 === 1 && mod100 !== 11) return forms[0];
-        if (mod10 >= 2 && mod10 <= 4 && (mod100 < 12 || mod100 > 14)) return forms[1];
-        return forms[2];
-    }
-
     /* ------------------------------------------------------------------ */
-    /* data loading                                                       */
+    /* catalog loading                                                    */
     /* ------------------------------------------------------------------ */
 
     function catalogQuery() {
@@ -221,7 +238,6 @@
     }
 
     async function loadProducts() {
-        state.loading = true;
         dom.empty.hidden = true;
         if (!dom.grid.children.length) {
             renderSkeletons();
@@ -229,13 +245,10 @@
         try {
             state.products = await request(`/products?${catalogQuery()}`);
             renderProducts();
-            updateSubtitle();
         } catch (error) {
             renderError(error);
-            updateSubtitle();
-        } finally {
-            state.loading = false;
         }
+        updateSubtitle();
     }
 
     async function loadInitialData() {
@@ -259,6 +272,178 @@
             toast(`Каталог недоступен: ${error.message}`, 'error');
         }
         await loadProducts();
+    }
+
+    /* ------------------------------------------------------------------ */
+    /* cart                                                               */
+    /* ------------------------------------------------------------------ */
+
+    let cartQueue = Promise.resolve();
+    let lastFocused = null;
+
+    function rememberCartId(id) {
+        try {
+            localStorage.setItem(CART_KEY, id);
+        } catch {
+            /* storage can be unavailable in private mode */
+        }
+    }
+
+    function savedCartId() {
+        try {
+            return localStorage.getItem(CART_KEY);
+        } catch {
+            return null;
+        }
+    }
+
+    const cartHeaders = () => (state.cart.id ? { 'X-Cart-Id': state.cart.id } : {});
+
+    /** Serialises cart mutations so rapid clicks cannot interleave responses. */
+    function enqueue(task) {
+        const run = cartQueue.then(task);
+        cartQueue = run.catch(() => undefined);
+        return run;
+    }
+
+    function applyCart(cart) {
+        state.cart = {
+            id: cart.id,
+            items: cart.items || [],
+            itemCount: cart.itemCount || 0,
+            subtotal: cart.subtotal || 0,
+        };
+        rememberCartId(cart.id);
+        renderCart();
+    }
+
+    async function loadCart() {
+        try {
+            applyCart(await request('/cart', { headers: cartHeaders() }));
+        } catch (error) {
+            console.warn('Не удалось загрузить корзину', error);
+        }
+    }
+
+    function addToCart(productId, { quantity = 1, openDrawer = false } = {}) {
+        return enqueue(async () => {
+            const cart = await request('/cart/items', {
+                method: 'POST',
+                headers: { ...cartHeaders(), 'Content-Type': 'application/json' },
+                body: JSON.stringify({ productId, quantity }),
+            });
+            applyCart(cart);
+            bumpBadge();
+            if (openDrawer) {
+                openCart();
+            } else {
+                toast('Товар добавлен в корзину');
+            }
+        }).catch((error) => toast(error.message, 'error'));
+    }
+
+    function setQuantity(productId, quantity) {
+        return enqueue(async () => {
+            const cart = await request(`/cart/items/${productId}`, {
+                method: 'PUT',
+                headers: { ...cartHeaders(), 'Content-Type': 'application/json' },
+                body: JSON.stringify({ quantity }),
+            });
+            applyCart(cart);
+        }).catch((error) => toast(error.message, 'error'));
+    }
+
+    function removeLine(productId) {
+        return enqueue(async () => {
+            const cart = await request(`/cart/items/${productId}`, {
+                method: 'DELETE',
+                headers: cartHeaders(),
+            });
+            applyCart(cart);
+        }).catch((error) => toast(error.message, 'error'));
+    }
+
+    function renderCart() {
+        const { items, itemCount, subtotal } = state.cart;
+
+        dom.cartCount.textContent = String(itemCount);
+        dom.cartCount.dataset.count = String(itemCount);
+        dom.drawerCount.textContent = String(itemCount);
+        dom.cartSubtotal.textContent = money.format(subtotal);
+        dom.checkoutButton.disabled = itemCount === 0;
+
+        if (!items.length) {
+            dom.cartLines.innerHTML = `
+                <div class="cart-empty">
+                    <p class="cart-empty__icon" aria-hidden="true">🛒</p>
+                    <p>Пока пусто. Самое время что-нибудь выбрать.</p>
+                    <button class="btn btn--ghost" type="button" data-action="close-cart">За покупками</button>
+                </div>`;
+            return;
+        }
+
+        dom.cartLines.innerHTML = items.map((line) => `
+            <article class="cart-line">
+                <div class="cart-line__art" style="--tint:${tintFor(line.category)}">
+                    <span aria-hidden="true">${line.icon}</span>
+                </div>
+                <div class="cart-line__body">
+                    <p class="cart-line__name">${escapeHtml(line.name)}</p>
+                    <p class="cart-line__price">${money.format(line.unitPrice)}</p>
+                    <div class="stepper">
+                        <button type="button" data-action="dec" data-id="${line.productId}"
+                                aria-label="Уменьшить количество">−</button>
+                        <span>${line.quantity}</span>
+                        <button type="button" data-action="inc" data-id="${line.productId}"
+                                aria-label="Увеличить количество"
+                                ${line.quantity >= line.stock ? 'disabled' : ''}>+</button>
+                    </div>
+                </div>
+                <div class="cart-line__side">
+                    <span class="cart-line__sum">${money.format(line.lineTotal)}</span>
+                    <button class="cart-line__remove" type="button" data-action="remove"
+                            data-id="${line.productId}" aria-label="Удалить «${escapeHtml(line.name)}»">✕</button>
+                </div>
+            </article>`).join('');
+    }
+
+    function bumpBadge() {
+        dom.cartCount.classList.remove('is-bumping');
+        void dom.cartCount.offsetWidth;
+        dom.cartCount.classList.add('is-bumping');
+    }
+
+    function openCart() {
+        if (dom.cartDrawer.classList.contains('is-open')) {
+            return;
+        }
+        lastFocused = document.activeElement;
+        dom.cartDrawer.classList.add('is-open');
+        dom.cartDrawer.setAttribute('aria-hidden', 'false');
+        dom.cartButton.setAttribute('aria-expanded', 'true');
+        dom.cartBackdrop.hidden = false;
+        requestAnimationFrame(() => dom.cartBackdrop.classList.add('is-visible'));
+        document.body.classList.add('no-scroll', 'cart-open');
+        dom.cartDrawer.focus({ preventScroll: true });
+    }
+
+    function closeCart() {
+        if (!dom.cartDrawer.classList.contains('is-open')) {
+            return;
+        }
+        dom.cartDrawer.classList.remove('is-open');
+        dom.cartDrawer.setAttribute('aria-hidden', 'true');
+        dom.cartButton.setAttribute('aria-expanded', 'false');
+        dom.cartBackdrop.classList.remove('is-visible');
+        document.body.classList.remove('no-scroll', 'cart-open');
+        window.setTimeout(() => {
+            if (!dom.cartDrawer.classList.contains('is-open')) {
+                dom.cartBackdrop.hidden = true;
+            }
+        }, 320);
+        if (lastFocused instanceof HTMLElement) {
+            lastFocused.focus({ preventScroll: true });
+        }
     }
 
     /* ------------------------------------------------------------------ */
@@ -329,6 +514,9 @@
         if (button.dataset.action === 'details') {
             openProduct(button.dataset.id);
         }
+        if (button.dataset.action === 'quick-add') {
+            addToCart(Number(button.dataset.id));
+        }
         if (button.dataset.action === 'retry') {
             loadProducts();
         }
@@ -345,7 +533,41 @@
             closeDialog();
         }
         if (button.dataset.action === 'add-to-cart') {
-            toast('Корзина появится в следующем обновлении — каталог уже готов.');
+            const productId = Number(button.dataset.id);
+            closeDialog();
+            addToCart(productId, { openDrawer: true });
+        }
+    });
+
+    dom.cartDrawer.addEventListener('click', (event) => {
+        const button = event.target.closest('[data-action]');
+        if (!button) return;
+        const { action } = button.dataset;
+        const productId = Number(button.dataset.id);
+
+        if (action === 'close-cart') {
+            closeCart();
+            return;
+        }
+        const line = state.cart.items.find((item) => item.productId === productId);
+        if (!line) return;
+
+        if (action === 'inc') setQuantity(productId, Math.min(line.quantity + 1, line.stock));
+        if (action === 'dec') setQuantity(productId, Math.max(line.quantity - 1, 0));
+        if (action === 'remove') removeLine(productId);
+    });
+
+    dom.cartBackdrop.addEventListener('click', closeCart);
+
+    dom.cartButton.addEventListener('click', openCart);
+
+    dom.checkoutButton.addEventListener('click', () => {
+        toast('Оформление заказа — следующий этап. Корзина уже сохраняется на сервере.');
+    });
+
+    document.addEventListener('keydown', (event) => {
+        if (event.key === 'Escape' && dom.cartDrawer.classList.contains('is-open')) {
+            closeCart();
         }
     });
 
@@ -376,10 +598,6 @@
         openProduct(random.id);
     });
 
-    dom.cartButton.addEventListener('click', () => {
-        toast('Корзина в разработке — следующий шаг: API корзины и оформление заказа.');
-    });
-
     /* keep the URL in sync when the native <dialog> is closed with Esc */
     dom.dialog.addEventListener('close', () => {
         if (location.hash.startsWith('#product-')) {
@@ -392,7 +610,7 @@
     /* ------------------------------------------------------------------ */
 
     (async () => {
-        await loadInitialData();
+        await Promise.all([loadInitialData(), loadCart()]);
         const deepLink = location.hash.match(/^#product-(\d+)$/);
         if (deepLink) {
             openProduct(Number(deepLink[1]));
