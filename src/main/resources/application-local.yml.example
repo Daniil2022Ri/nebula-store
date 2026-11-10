@@ -1,0 +1,7 @@
+# Local development overrides — copy this file to application-local.yml
+# (application-local.yml is git-ignored) and put your own PostgreSQL password in it.
+spring:
+  datasource:
+    url: jdbc:postgresql://localhost:5432/nebula
+    username: postgres
+    password: "change-me"

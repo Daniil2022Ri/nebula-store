@@ -44,19 +44,34 @@
 |---------------|-------------------------------------------------------------------|
 | Язык          | Java 21 (проект собирается и на JDK 25)                            |
 | Бэкенд        | Spring Boot 3.5 — Web MVC, Data JPA, Validation, Actuator          |
-| БД            | H2 2.x, файловый режим `./data/nebula`                              |
+| БД            | PostgreSQL 18 (H2 — только для тестов, in-memory)                  |
 | Фронтенд      | Vanilla JS (ES2022), CSS custom properties, `<dialog>`, без npm     |
 | Сборка        | Maven 3.9 + Maven Wrapper                                          |
 | Тесты         | JUnit 5, AssertJ, MockMvc, Hamcrest                                |
 
 ## Быстрый старт
 
-Нужен JDK 21 или новее.
+Нужен JDK 21 или новее и локальный PostgreSQL на `localhost:5432`.
 
 ```bash
+# 1. создайте базу (один раз)
+psql -U postgres -c "CREATE DATABASE nebula"
+# или: createdb -U postgres nebula
+
+# 2. положите пароль в локальный конфиг (файл в .gitignore)
+cp src/main/resources/application-local.yml.example src/main/resources/application-local.yml
+#    и отредактируйте пароль в application-local.yml
+
+# 3. запустите
 git clone https://github.com/Daniil2022Ri/nebula-store.git
 cd nebula-store
 ./mvnw spring-boot:run          # Windows: mvnw.cmd spring-boot:run
+```
+
+Пароль можно не хранить в файле, а передать переменной окружения:
+
+```bash
+NEBULA_DB_PASSWORD=secret ./mvnw spring-boot:run
 ```
 
 | Что                | Адрес                                      |
@@ -64,9 +79,10 @@ cd nebula-store
 | Витрина            | <http://localhost:8080>                    |
 | API                | <http://localhost:8080/api/products>       |
 | Health             | <http://localhost:8080/actuator/health>    |
-| Консоль H2         | <http://localhost:8080/h2-console>         |
+| База               | `jdbc:postgresql://localhost:5432/nebula`  |
 
-Параметры консоли H2: JDBC URL `jdbc:h2:file:./data/nebula`, пользователь `sa`, пароль пустой.
+Схему (`products`, `orders`, `order_items`) Hibernate создаёт сам при старте
+(`ddl-auto: update`), демо-каталог засеивается, если таблица товаров пуста.
 
 Собрать исполняемый jar и запустить его:
 
@@ -75,7 +91,10 @@ cd nebula-store
 java -jar target/nebula-store-1.0.0.jar
 ```
 
-Чтобы начать с чистого каталога, остановите приложение и удалите папку `data/`.
+Чтобы начать с чистого каталога, остановите приложение и выполните
+`DROP SCHEMA public CASCADE; CREATE SCHEMA public;` в базе `nebula` (или `DROP DATABASE nebula`).
+
+Тесты работают на H2 в памяти и PostgreSQL не требуют: `./mvnw test`.
 
 ## API
 
@@ -219,7 +238,8 @@ src/main/java/com/nebula/store
 
 src/main/resources
 ├── application.yml
-└── static/                      витрина: index.html, css/, js/, favicon.svg
+├── application-local.yml.example  шаблон локальных кредов (реальный файл в .gitignore)
+└── static/                        витрина: index.html, css/, js/, favicon.svg
 
 src/test/                        интеграционные (MockMvc) и юнит-тесты
 ```
@@ -229,10 +249,18 @@ src/test/                        интеграционные (MockMvc) и юн�
 | Переменная / свойство        | По умолчанию            | Назначение                          |
 |------------------------------|-------------------------|-------------------------------------|
 | `server.port`                | `8080`                  | Порт приложения                     |
-| `spring.datasource.url`      | `jdbc:h2:file:./data/nebula` | Подключение к H2               |
+| `NEBULA_DB_URL` / `spring.datasource.url` | `jdbc:postgresql://localhost:5432/nebula` | Подключение к PostgreSQL |
+| `NEBULA_DB_USER`             | `postgres`              | Пользователь БД                     |
+| `NEBULA_DB_PASSWORD`         | `postgres`              | Пароль БД (локально — в `application-local.yml`) |
 | `NEBULA_SEED` / `app.seed-demo-data` | `true`          | Засеивать ли демо-каталог           |
 | `app.cart-ttl-minutes`       | `720`                   | Сколько минут живёт брошенная корзина |
 | `NEBULA_ADMIN_TOKEN` / `app.admin-token` | `dev-admin-token` | Токен админки (появится на этапе 4) |
+
+Профили: по умолчанию активен `local` (берёт `application-local.yml`, если он есть),
+тесты запускаются с профилем `test` на H2 в памяти.
+
+> Для демо приложение ходит в PostgreSQL суперпользователем `postgres`.
+> В реальном проекте стоит завести отдельную роль с правами только на свою схему.
 
 ## Тесты
 
@@ -254,4 +282,4 @@ src/test/                        интеграционные (MockMvc) и юн�
 - [x] Этап 2 — корзина: `GET/POST/PUT/DELETE /api/cart`, шторка, бейдж, лимиты по складу
 - [x] Этап 3 — оформление заказа: `POST /api/orders`, снимок цен, списание стока, страница успеха
 - [ ] Этап 4 — админка заказов по токену, смена статусов
-- [ ] Этап 5 — Dockerfile + PostgreSQL, миграции Flyway
+- [ ] Этап 5 — Dockerfile, миграции Flyway, отдельная роль БД вместо `postgres`

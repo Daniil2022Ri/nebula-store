@@ -26,3 +26,4 @@ logs/
 # Environment
 .env
 .env.local
+src/main/resources/application-local.yml
