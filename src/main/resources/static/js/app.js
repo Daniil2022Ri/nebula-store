@@ -43,6 +43,8 @@
         cartSubtotal: document.getElementById('cart-subtotal'),
         drawerCount: document.getElementById('drawer-count'),
         checkoutButton: document.getElementById('checkout-button'),
+        checkoutDialog: document.getElementById('checkout-dialog'),
+        checkoutBody: document.getElementById('checkout-body'),
         shuffle: document.getElementById('hero-shuffle'),
         statProducts: document.getElementById('stat-products'),
         statCategories: document.getElementById('stat-categories'),
@@ -92,13 +94,17 @@
         });
         if (!response.ok) {
             let detail = `Ошибка ${response.status}`;
+            let fieldErrors = null;
             try {
                 const body = await response.json();
                 detail = body.detail || body.title || detail;
+                fieldErrors = body.errors || null;
             } catch {
                 /* body is not JSON — keep the generic message */
             }
-            throw new Error(detail);
+            const error = new Error(detail);
+            error.fieldErrors = fieldErrors;
+            throw error;
         }
         return response.json();
     }
@@ -413,6 +419,12 @@
         dom.cartCount.classList.add('is-bumping');
     }
 
+    /** Keeps the page from scrolling behind the cart drawer or the checkout dialog. */
+    function syncScrollLock() {
+        const locked = dom.cartDrawer.classList.contains('is-open') || dom.checkoutDialog.open;
+        document.body.classList.toggle('no-scroll', locked);
+    }
+
     function openCart() {
         if (dom.cartDrawer.classList.contains('is-open')) {
             return;
@@ -423,7 +435,8 @@
         dom.cartButton.setAttribute('aria-expanded', 'true');
         dom.cartBackdrop.hidden = false;
         requestAnimationFrame(() => dom.cartBackdrop.classList.add('is-visible'));
-        document.body.classList.add('no-scroll', 'cart-open');
+        document.body.classList.add('cart-open');
+        syncScrollLock();
         dom.cartDrawer.focus({ preventScroll: true });
     }
 
@@ -435,7 +448,8 @@
         dom.cartDrawer.setAttribute('aria-hidden', 'true');
         dom.cartButton.setAttribute('aria-expanded', 'false');
         dom.cartBackdrop.classList.remove('is-visible');
-        document.body.classList.remove('no-scroll', 'cart-open');
+        document.body.classList.remove('cart-open');
+        syncScrollLock();
         window.setTimeout(() => {
             if (!dom.cartDrawer.classList.contains('is-open')) {
                 dom.cartBackdrop.hidden = true;
@@ -444,6 +458,197 @@
         if (lastFocused instanceof HTMLElement) {
             lastFocused.focus({ preventScroll: true });
         }
+    }
+
+    /* ------------------------------------------------------------------ */
+    /* checkout                                                           */
+    /* ------------------------------------------------------------------ */
+
+    function openCheckout() {
+        if (!state.cart.itemCount) {
+            toast('Сначала добавьте товары в корзину');
+            return;
+        }
+        dom.checkoutBody.innerHTML = checkoutFormHtml();
+        dom.checkoutDialog.showModal();
+        syncScrollLock();
+        dom.checkoutBody.querySelector('input[name="name"]')?.focus({ preventScroll: true });
+    }
+
+    function closeCheckout() {
+        if (dom.checkoutDialog.open) {
+            dom.checkoutDialog.close();
+        }
+    }
+
+    function summaryLines(items) {
+        return items.map((item) => `
+            <li class="summary-line">
+                <span class="summary-line__icon" aria-hidden="true">${item.icon}</span>
+                <span>
+                    <span class="summary-line__name">${escapeHtml(item.name)}</span>
+                    <span class="summary-line__qty">${item.quantity} × ${money.format(item.unitPrice)}</span>
+                </span>
+                <strong>${money.format(item.lineTotal)}</strong>
+            </li>`).join('');
+    }
+
+    function checkoutFormHtml() {
+        const { items, subtotal } = state.cart;
+        return `
+        <form id="checkout-form" class="checkout">
+            <div class="checkout__form">
+                <h2 id="checkout-title" class="dialog__title">Оформление заказа</h2>
+                <p class="muted small">Доставка за два дня, оплата при получении. Данные нужны только для демо-заказа.</p>
+
+                <label class="field">
+                    <span>Имя и фамилия</span>
+                    <input class="input" name="name" maxlength="120" autocomplete="name" required>
+                    <small class="field-error" data-error-for="name"></small>
+                </label>
+
+                <label class="field">
+                    <span>Email</span>
+                    <input class="input" name="email" type="email" maxlength="160" autocomplete="email" required>
+                    <small class="field-error" data-error-for="email"></small>
+                </label>
+
+                <label class="field">
+                    <span>Адрес доставки</span>
+                    <textarea class="input input--area" name="address" rows="2" maxlength="400" required
+                              placeholder="Город, улица, дом, квартира"></textarea>
+                    <small class="field-error" data-error-for="address"></small>
+                </label>
+
+                <label class="field">
+                    <span>Комментарий <em>— необязательно</em></span>
+                    <input class="input" name="comment" maxlength="600" placeholder="Домофон, удобное время…">
+                </label>
+
+                <div id="checkout-alert" class="form-alert" hidden></div>
+
+                <button class="btn btn--primary btn--block" type="submit" id="checkout-submit">
+                    Оформить заказ · ${money.format(subtotal)}
+                </button>
+                <p class="muted small">Это демо-проект: заказ сохранится в базе, но никто никуда его не повезёт.</p>
+            </div>
+
+            <aside class="checkout__summary" aria-label="Состав заказа">
+                <h3>Ваш заказ</h3>
+                <ul class="summary-list">${summaryLines(items)}</ul>
+                <div class="summary-total"><span>Итого</span><strong>${money.format(subtotal)}</strong></div>
+            </aside>
+
+            <button class="dialog__close" type="button" data-action="close-checkout" aria-label="Закрыть">
+                <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18"></path></svg>
+            </button>
+        </form>`;
+    }
+
+    function showOrderSuccess(order) {
+        dom.checkoutBody.innerHTML = `
+            <div class="checkout-success">
+                <div class="checkout-success__icon" aria-hidden="true">✓</div>
+                <h2 id="checkout-title" class="dialog__title">Заказ оформлен</h2>
+                <p class="muted">Номер заказа — нажмите, чтобы скопировать</p>
+                <button class="order-code" type="button" data-action="copy-code" data-code="${escapeHtml(order.code)}">
+                    ${escapeHtml(order.code)}
+                </button>
+                <div class="checkout-success__meta">
+                    <span class="pill pill--ok">${escapeHtml(order.statusTitle)}</span>
+                    <span class="pill">
+                        ${order.itemCount} ${plural(order.itemCount, ['позиция', 'позиции', 'позиций'])}
+                        · ${money.format(order.total)}
+                    </span>
+                </div>
+                <ul class="summary-list">${summaryLines(order.items)}</ul>
+                <p class="muted small">Подтверждение отправим на ${escapeHtml(order.email)}.</p>
+                <button class="btn btn--primary" type="button" data-action="finish-checkout">Продолжить покупки</button>
+            </div>
+            <button class="dialog__close" type="button" data-action="close-checkout" aria-label="Закрыть">
+                <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18"></path></svg>
+            </button>`;
+
+        dom.checkoutDialog.focus({ preventScroll: true });
+    }
+
+    async function submitCheckout(event) {
+        event.preventDefault();
+        const form = event.target;
+        const submit = form.querySelector('#checkout-submit');
+        const label = submit ? submit.textContent : '';
+        clearFormErrors(form);
+
+        const data = Object.fromEntries(new FormData(form).entries());
+        if (submit) {
+            submit.disabled = true;
+            submit.textContent = 'Оформляем…';
+        }
+
+        try {
+            const order = await request('/orders', {
+                method: 'POST',
+                headers: { ...cartHeaders(), 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    name: String(data.name || '').trim(),
+                    email: String(data.email || '').trim(),
+                    address: String(data.address || '').trim(),
+                    comment: data.comment ? String(data.comment).trim() : null,
+                }),
+            });
+            applyCart({ id: state.cart.id, items: [], itemCount: 0, subtotal: 0 });
+            closeCart();
+            showOrderSuccess(order);
+        } catch (error) {
+            if (error.fieldErrors) {
+                showFieldErrors(form, error.fieldErrors);
+            } else {
+                showFormAlert(form, error.message);
+            }
+        } finally {
+            if (submit) {
+                submit.disabled = false;
+                submit.textContent = label;
+            }
+        }
+    }
+
+    function showFieldErrors(form, errors) {
+        Object.entries(errors).forEach(([field, message]) => {
+            const hint = form.querySelector(`[data-error-for="${field}"]`);
+            const input = form.querySelector(`[name="${field}"]`);
+            if (hint) hint.textContent = message;
+            if (input) {
+                input.classList.add('is-invalid');
+                input.setAttribute('aria-invalid', 'true');
+            }
+        });
+        form.querySelector('.input.is-invalid')?.focus({ preventScroll: true });
+    }
+
+    function clearFormErrors(form) {
+        form.querySelectorAll('.field-error').forEach((hint) => {
+            hint.textContent = '';
+        });
+        form.querySelectorAll('.input').forEach((input) => {
+            input.classList.remove('is-invalid');
+            input.removeAttribute('aria-invalid');
+        });
+        const alert = form.querySelector('#checkout-alert');
+        if (alert) {
+            alert.hidden = true;
+            alert.textContent = '';
+        }
+    }
+
+    function showFormAlert(form, message) {
+        const alert = form.querySelector('#checkout-alert');
+        if (!alert) {
+            toast(message, 'error');
+            return;
+        }
+        alert.textContent = message;
+        alert.hidden = false;
     }
 
     /* ------------------------------------------------------------------ */
@@ -561,9 +766,39 @@
 
     dom.cartButton.addEventListener('click', openCart);
 
-    dom.checkoutButton.addEventListener('click', () => {
-        toast('Оформление заказа — следующий этап. Корзина уже сохраняется на сервере.');
+    dom.checkoutButton.addEventListener('click', openCheckout);
+
+    dom.checkoutDialog.addEventListener('submit', (event) => {
+        if (event.target.id === 'checkout-form') {
+            submitCheckout(event);
+        }
     });
+
+    dom.checkoutDialog.addEventListener('click', (event) => {
+        if (event.target === dom.checkoutDialog) {
+            closeCheckout();
+            return;
+        }
+        const button = event.target.closest('[data-action]');
+        if (!button) return;
+        const { action } = button.dataset;
+
+        if (action === 'close-checkout' || action === 'finish-checkout') {
+            closeCheckout();
+        }
+        if (action === 'copy-code') {
+            const code = button.dataset.code || '';
+            if (navigator.clipboard && navigator.clipboard.writeText) {
+                navigator.clipboard.writeText(code)
+                    .then(() => toast(`Номер ${code} скопирован`))
+                    .catch(() => toast(`Номер заказа: ${code}`));
+            } else {
+                toast(`Номер заказа: ${code}`);
+            }
+        }
+    });
+
+    dom.checkoutDialog.addEventListener('close', syncScrollLock);
 
     document.addEventListener('keydown', (event) => {
         if (event.key === 'Escape' && dom.cartDrawer.classList.contains('is-open')) {
