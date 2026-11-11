@@ -1,0 +1,115 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Nebula Store — админка</title>
+    <meta name="robots" content="noindex">
+    <link rel="icon" href="/favicon.svg" type="image/svg+xml">
+    <link rel="stylesheet" href="/css/styles.css">
+    <link rel="stylesheet" href="/css/admin.css">
+</head>
+<body>
+<div class="aurora" aria-hidden="true">
+    <span class="aurora__blob aurora__blob--one"></span>
+    <span class="aurora__blob aurora__blob--two"></span>
+</div>
+
+<header class="site-header">
+    <a class="brand" href="/" aria-label="Nebula Store, на главную">
+        <span class="brand__mark">N</span>
+        <span class="brand__text">Nebula<em>store</em></span>
+    </a>
+    <span class="admin-badge">Админка</span>
+
+    <div class="header-actions">
+        <a class="btn btn--ghost btn--small" href="/">← В магазин</a>
+        <button id="logout" class="btn btn--ghost btn--small" type="button" hidden>Выйти</button>
+    </div>
+</header>
+
+<main class="admin-main">
+    <section id="login" class="login" hidden>
+        <form id="login-form" class="login__card">
+            <h1 class="login__title">Вход в админку</h1>
+            <p class="muted small">Введите токен администратора — он передаётся в заголовке
+                <code>X-Admin-Token</code> и хранится только в этой вкладке.</p>
+
+            <label class="field">
+                <span>Токен</span>
+                <input class="input" name="token" type="password" required autocomplete="off"
+                       placeholder="dev-admin-token">
+                <small class="field-error" id="login-error"></small>
+            </label>
+
+            <button class="btn btn--primary btn--block" type="submit">Войти</button>
+            <p class="muted small">По умолчанию в конфиге: <code>dev-admin-token</code></p>
+        </form>
+    </section>
+
+    <section id="dashboard" hidden>
+        <div class="admin-toolbar">
+            <div>
+                <h1 class="section-title">Заказы</h1>
+                <p class="muted small" id="dashboard-subtitle">Загружаем…</p>
+            </div>
+            <button id="refresh" class="btn btn--ghost btn--small" type="button">Обновить</button>
+        </div>
+
+        <div class="stats">
+            <article class="stat-card">
+                <span class="stat-card__label">Заказов</span>
+                <strong class="stat-card__value" id="stat-orders">—</strong>
+            </article>
+            <article class="stat-card">
+                <span class="stat-card__label">Выручка</span>
+                <strong class="stat-card__value" id="stat-revenue">—</strong>
+            </article>
+            <article class="stat-card">
+                <span class="stat-card__label">Продано единиц</span>
+                <strong class="stat-card__value" id="stat-units">—</strong>
+            </article>
+            <article class="stat-card">
+                <span class="stat-card__label">Средний чек</span>
+                <strong class="stat-card__value" id="stat-average">—</strong>
+            </article>
+        </div>
+
+        <div id="status-chips" class="chips" role="group" aria-label="Фильтр по статусу"></div>
+
+        <div class="table-wrap">
+            <table class="orders-table">
+                <thead>
+                <tr>
+                    <th>Номер</th>
+                    <th>Дата</th>
+                    <th>Покупатель</th>
+                    <th>Позиции</th>
+                    <th>Сумма</th>
+                    <th>Статус</th>
+                    <th class="orders-table__actions">Действия</th>
+                </tr>
+                </thead>
+                <tbody id="orders-body"></tbody>
+            </table>
+        </div>
+
+        <div id="empty-orders" class="empty" hidden>
+            <p class="empty__icon" aria-hidden="true">📭</p>
+            <h3>Заказов пока нет</h3>
+            <p class="muted">Оформи что-нибудь в магазине — заказ появится здесь.</p>
+        </div>
+
+        <nav id="pager" class="admin-pager" aria-label="Постраничная навигация"></nav>
+    </section>
+</main>
+
+<dialog id="order-dialog" class="dialog admin-dialog" tabindex="-1" aria-labelledby="order-dialog-title">
+    <div id="order-body"></div>
+</dialog>
+
+<div id="toasts" class="toasts" role="status" aria-live="polite"></div>
+
+<script src="/js/admin.js" defer></script>
+</body>
+</html>

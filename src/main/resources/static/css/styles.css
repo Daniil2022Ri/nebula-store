@@ -819,6 +819,17 @@ main {
     font-size: 0.9rem;
 }
 
+.site-footer__link {
+    color: var(--accent-soft);
+    border-bottom: 1px dashed rgba(167, 139, 250, 0.5);
+    transition: color 0.2s, border-color 0.2s;
+}
+
+.site-footer__link:hover {
+    color: var(--cyan);
+    border-color: var(--cyan);
+}
+
 /* ---------- dialog ---------- */
 
 .dialog {
