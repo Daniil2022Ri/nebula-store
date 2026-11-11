@@ -16,16 +16,24 @@ spring:
 
   datasource:
     url: ${NEBULA_DB_URL:jdbc:postgresql://localhost:5432/nebula}
-    username: ${NEBULA_DB_USER:postgres}
-    password: ${NEBULA_DB_PASSWORD:postgres}
+    username: ${NEBULA_DB_USER:nebula}
+    password: ${NEBULA_DB_PASSWORD:nebula}
     hikari:
       pool-name: nebula-pool
       maximum-pool-size: 10
 
+  # Schema is owned by Flyway; Hibernate only validates that the mapping matches.
+  flyway:
+    enabled: true
+    locations: classpath:db/migration
+    baseline-on-migrate: true
+    baseline-version: 1
+    validate-on-migrate: true
+
   jpa:
     open-in-view: false
     hibernate:
-      ddl-auto: update
+      ddl-auto: validate
     properties:
       hibernate:
         jdbc:
