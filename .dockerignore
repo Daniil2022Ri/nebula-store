@@ -1,0 +1,12 @@
+target/
+out/
+.git/
+.gitignore
+.idea/
+data/
+docs/
+*.iml
+*.md
+.env
+.env.local
+src/main/resources/application-local.yml
