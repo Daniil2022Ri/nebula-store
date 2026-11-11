@@ -96,6 +96,14 @@ public class Product {
         return active && stock >= quantity;
     }
 
+    /** Returns units to stock, e.g. when an order is cancelled. */
+    public void restoreStock(int quantity) {
+        if (quantity <= 0) {
+            throw new IllegalArgumentException("Quantity must be positive");
+        }
+        stock += quantity;
+    }
+
     public Long getId() {
         return id;
     }
